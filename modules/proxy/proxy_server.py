@@ -21,108 +21,38 @@ def get_local_ip():
         return '127.0.0.1'
 
 
-def _get_local_mitmdump_path():
-    """获取本地内置的 mitmproxy 路径"""
-    # 当前文件: modules/proxy/proxy_server.py
-    # 需要往上三层才能到项目根目录
+def _check_local_mitmproxy():
+    """检查本地内置的 mitmproxy 是否可用"""
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    libs_dir = os.path.join(project_root, "tools", "mitmproxy", "libs")
     
-    if sys.platform == "win32":
-        mitmdump_exe = os.path.join(project_root, "tools", "mitmproxy", "mitmdump.exe")
-        if os.path.isfile(mitmdump_exe):
-            return mitmdump_exe
-    
-    mitmdump_unix = os.path.join(project_root, "tools", "mitmproxy", "mitmdump")
-    if os.path.isfile(mitmdump_unix):
-        return mitmdump_unix
+    if os.path.isdir(libs_dir):
+        mitmproxy_dir = os.path.join(libs_dir, "mitmproxy")
+        if os.path.isdir(mitmproxy_dir):
+            return libs_dir
     
     return None
 
 
-def _get_python_scripts_dir():
-    """动态获取 Python Scripts/bin 目录路径"""
-    python_exe = sys.executable
-    python_dir = os.path.dirname(python_exe)
-    
-    # Windows 环境
-    if sys.platform == "win32":
-        # 检查是否在虚拟环境中
-        if hasattr(sys, 'prefix') and sys.prefix != sys.base_prefix:
-            # 虚拟环境：Scripts 目录通常在 Python 根目录
-            scripts_dir = os.path.join(python_dir, 'Scripts')
-            if os.path.isdir(scripts_dir):
-                return scripts_dir
-        
-        # 检查常见的 Scripts 位置
-        candidates = [
-            os.path.join(python_dir, 'Scripts'),  # 标准 Python 安装
-            python_dir,  # 某些环境直接在根目录
-            os.path.join(os.path.dirname(python_dir), 'Scripts'),  # 上级目录
-        ]
-        
-        for candidate in candidates:
-            if os.path.isdir(candidate):
-                return candidate
-        
-        # 默认返回标准路径
-        return os.path.join(python_dir, 'Scripts')
-    
-    # Unix/Linux/macOS 环境
-    else:
-        # 检查是否在虚拟环境中
-        if hasattr(sys, 'prefix') and sys.prefix != sys.base_prefix:
-            # 虚拟环境：bin 目录通常在 Python 根目录
-            bin_dir = os.path.join(python_dir, 'bin')
-            if os.path.isdir(bin_dir):
-                return bin_dir
-        
-        # 检查常见的 bin 位置
-        candidates = [
-            os.path.join(python_dir, 'bin'),  # 标准 Unix Python
-            python_dir,  # 某些环境直接在根目录
-            os.path.join(os.path.dirname(python_dir), 'bin'),  # 上级目录
-            '/usr/local/bin',  # 系统 Python
-            '/usr/bin',  # 系统 Python
-        ]
-        
-        for candidate in candidates:
-            if os.path.isdir(candidate):
-                return candidate
-        
-        # 默认返回标准路径
-        return os.path.join(python_dir, 'bin')
-
-
 def _find_mitmdump():
-    """查找 mitmdump 可执行文件（优先使用本地内置版本）"""
+    """查找 mitmdump 运行方式（优先使用本地内置版本）"""
     
     # 1. 优先使用项目内置的 mitmproxy
-    local_mitmdump = _get_local_mitmdump_path()
-    if local_mitmdump:
-        print('[WebProxy] 使用本地内置 mitmproxy: ' + local_mitmdump)
-        return local_mitmdump, True  # (路径, 是否为本地版本)
+    local_libs = _check_local_mitmproxy()
+    if local_libs:
+        print('[WebProxy] 使用本地内置 mitmproxy 模块')
+        return True, local_libs  # (使用本地模块, libs路径)
     
-    # 2. 动态检测 Python Scripts/bin 目录
-    scripts_dir = _get_python_scripts_dir()
-    exe_name = 'mitmdump.exe' if sys.platform == "win32" else 'mitmdump'
-    
-    # 3. 在检测到的 Scripts 目录中查找
-    mitmdump_path = os.path.join(scripts_dir, exe_name)
-    if os.path.isfile(mitmdump_path):
-        print('[WebProxy] 使用系统安装 mitmproxy: ' + mitmdump_path)
-        return mitmdump_path, False
-    
-    # 4. 从系统 PATH 中查找（最后手段）
+    # 2. 检查系统是否安装了 mitmproxy
     try:
-        import shutil
-        result = shutil.which('mitmdump')
-        if result:
-            print('[WebProxy] 从 PATH 找到 mitmproxy: ' + result)
-            return result, False
-    except Exception:
+        import mitmproxy
+        print('[WebProxy] 使用系统安装 mitmproxy 模块')
+        return False, None  # (使用系统模块, 无需额外路径)
+    except ImportError:
         pass
     
-    return None, False
+    print('[WebProxy] 未找到 mitmproxy，请确保 mitmproxy 已安装或运行 python tools/install_mitmproxy.py')
+    return None, None
 
 
 def _update_addon_host():
@@ -163,17 +93,19 @@ def start_proxy_server(host='0.0.0.0', port=5003):
     except Exception:
         pass
 
-    mitmdump_path, is_local = _find_mitmdump()
-    if not mitmdump_path:
-        print('[WebProxy] 未找到 mitmdump，请确保 mitmproxy 已安装或运行 python tools/install_mitmproxy.py')
+    use_local, libs_path = _find_mitmdump()
+    if use_local is None:
+        print('[WebProxy] 未找到 mitmproxy，请确保 mitmproxy 已安装或运行 python tools/install_mitmproxy.py')
         return False
 
     _update_addon_host()
 
     addon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'proxy_addon.py')
 
+    # 使用 Python 模块方式运行 mitmproxy（避免 .exe 硬编码路径问题）
     cmd = [
-        mitmdump_path,
+        sys.executable,  # 使用当前 Python 解释器
+        '-m', 'mitmproxy.tools.dump',  # 以模块方式运行 mitmdump
         '--listen-host', host,
         '--listen-port', str(port),
         '--mode', 'regular',
@@ -184,21 +116,16 @@ def start_proxy_server(host='0.0.0.0', port=5003):
         '-s', addon_path,
     ]
 
-    env = None
-    if is_local:
-        # 当前文件: modules/proxy/proxy_server.py，需要往上三层到项目根目录
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        libs_path = os.path.join(project_root, "tools", "mitmproxy", "libs")
-        
-        env = os.environ.copy()
-        
+    env = os.environ.copy()
+    if use_local and libs_path:
+        # 使用本地内置的 mitmproxy 模块
         current_pythonpath = env.get('PYTHONPATH', '')
         if current_pythonpath:
             env['PYTHONPATH'] = libs_path + os.pathsep + current_pythonpath
         else:
             env['PYTHONPATH'] = libs_path
         
-        print('[WebProxy] 设置 PYTHONPATH 包含本地依赖库')
+        print('[WebProxy] 设置 PYTHONPATH 包含本地依赖库: ' + libs_path)
 
     try:
         # 创建日志文件路径（用于捕获错误信息）
@@ -212,10 +139,10 @@ def start_proxy_server(host='0.0.0.0', port=5003):
         error_log.write(f"\n{'='*60}\n")
         error_log.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Starting mitmdump\n")
         error_log.write(f"Command: {' '.join(cmd)}\n")
-        error_log.write(f"PYTHONPATH: {env.get('PYTHONPATH', 'Not set') if env else 'Not set'}\n")
+        error_log.write(f"Python: {sys.executable}\n")
+        error_log.write(f"PYTHONPATH: {env.get('PYTHONPATH', 'Not set')}\n")
         error_log.write(f"Working Dir: {os.getcwd()}\n")
-        error_log.write(f"mitmdump path: {mitmdump_path}\n")
-        error_log.write(f"is_local: {is_local}\n")
+        error_log.write(f"Use local: {use_local}\n")
         error_log.write(f"{'='*60}\n")
         error_log.flush()
         
@@ -253,8 +180,8 @@ def start_proxy_server(host='0.0.0.0', port=5003):
         # 注意：不关闭 error_log，让进程继续写入
         print('[WebProxy] 错误日志路径: ' + log_file)
 
-        source_type = "本地内置" if is_local else "系统安装"
-        print('[WebProxy] 代理服务器已启动 ({source}, mitmproxy): http://{host}:{port}'.format(
+        source_type = "本地内置" if use_local else "系统安装"
+        print('[WebProxy] 代理服务器已启动 ({source}, Python模块模式): http://{host}:{port}'.format(
             source=source_type,
             host=_proxy_host,
             port=str(port)

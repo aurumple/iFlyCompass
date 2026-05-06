@@ -2,6 +2,80 @@
 
 ## 版本更新
 
+### REL2.5.2
+
+**mitmproxy 优化 + FFmpeg 恢复**
+
+#### 一、mitmproxy 运行方式优化
+
+- **问题背景**：
+  - 本地内置的 mitmdump.exe 内部硬编码了开发环境的 Python 路径
+  - 生产环境路径不同，导致无法创建进程
+  - 错误：`Fatal error in launcher: Unable to create process`
+  - `python -m mitmproxy.tools.dump` 模块方式会立即退出
+
+- **解决方案**：
+  - 删除本地内置的 mitmproxy 和所有依赖库（tools/mitmproxy/）
+  - 改用系统安装的 mitmproxy（`pip install mitmproxy`）
+  - 使用 `mitmdump` 命令直接运行
+  - 使用 `CREATE_NEW_CONSOLE` 创建独立的控制台窗口
+
+- **代码变更**：
+  - 删除 `_check_local_mitmproxy()` 函数
+  - 简化 `_check_mitmproxy()` 只检查系统安装
+  - 修改 `start_proxy_server()`：
+    * 使用 `mitmdump` 命令
+    * 使用 `CREATE_NEW_CONSOLE` 创建新窗口
+    * 不重定向 stdout/stderr，让日志显示在独立窗口
+    * 移除 `console_eventlog_verbosity` 和 `termlog_verbosity` 参数
+
+- **删除文件**：
+  - `tools/mitmproxy/` 目录（包含 mitmdump.exe 和所有依赖库）
+  - `tools/install_mitmproxy.py`（安装脚本）
+  - `tools/test_mitmproxy.py`（测试脚本）
+  - `tools/diagnose_mitmproxy.py`（诊断工具）
+
+- **优势**：
+  | 特性 | 说明 |
+  |------|------|
+  | 进程可见 | 独立窗口显示 mitmproxy 日志 |
+  | 易于调试 | 实时查看所有请求和错误 |
+  | 代码简洁 | 减少 44 行代码 |
+  | 稳定运行 | 使用正确的 mitmdump 命令 |
+
+- **使用方法**：
+  ```bash
+  # 安装 mitmproxy
+  pip install mitmproxy
+
+  # 启动应用
+  python app.py
+
+  # mitmproxy 会在独立窗口中运行
+  ```
+
+#### 二、FFmpeg 恢复
+
+- **问题**：
+  - 之前误删了整个 tools/ 目录
+  - 导致 ffmpeg.exe 和 ffprobe.exe 丢失
+  - B站视频缓存功能无法使用
+
+- **修复**：
+  - 从 Git 历史恢复 `tools/ffmpeg/` 目录
+  - 恢复 ffmpeg.exe 和 ffprobe.exe
+
+#### 三、代码简化
+
+- **proxy_server.py**：
+  - 从 233 行减少到 189 行
+  - 删除本地内置相关的所有逻辑
+  - 删除 PYTHONPATH 设置
+  - 删除复杂的路径查找
+
+- **.gitignore**：
+  - 删除 mitmproxy 相关注释
+
 ### REL2.5.1_fix1
 
 **mitmproxy 本地内置 + 跨平台 FFmpeg 支持**

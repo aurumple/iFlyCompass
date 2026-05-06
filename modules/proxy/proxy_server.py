@@ -76,71 +76,58 @@ def start_proxy_server(host='0.0.0.0', port=5003):
 
     addon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'proxy_addon.py')
 
-    # 使用 Python 模块方式运行 mitmproxy
+    # 使用 mitmdump 命令运行 mitmproxy
     cmd = [
-        sys.executable,
-        '-m', 'mitmproxy.tools.dump',
+        'mitmdump',
         '--listen-host', host,
         '--listen-port', str(port),
         '--mode', 'regular',
         '--set', 'http2=false',
         '--set', 'ssl_insecure=true',
-        '--set', 'console_eventlog_verbosity=error',
-        '--set', 'termlog_verbosity=error',
         '-s', addon_path,
     ]
 
     try:
-        # 创建日志文件路径（用于捕获错误信息）
+        # 记录启动信息到日志文件
         log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
         if not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
         log_file = os.path.join(log_dir, 'mitmdump_error.log')
         
-        # 打开日志文件用于捕获错误输出
-        error_log = open(log_file, 'a', encoding='utf-8')
-        error_log.write(f"\n{'='*60}\n")
-        error_log.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Starting mitmdump\n")
-        error_log.write(f"Command: {' '.join(cmd)}\n")
-        error_log.write(f"Python: {sys.executable}\n")
-        error_log.write(f"Working Dir: {os.getcwd()}\n")
-        error_log.write(f"{'='*60}\n")
-        error_log.flush()
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f"\n{'='*60}\n")
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Starting mitmdump\n")
+            f.write(f"Command: {' '.join(cmd)}\n")
+            f.write(f"Python: {sys.executable}\n")
+            f.write(f"Working Dir: {os.getcwd()}\n")
+            f.write(f"{'='*60}\n")
+        
+        # 创建新的控制台窗口运行 mitmproxy（不隐藏窗口）
+        if sys.platform == 'win32':
+            creation_flags = subprocess.CREATE_NEW_CONSOLE
+        else:
+            creation_flags = 0
         
         _proxy_process = subprocess.Popen(
             cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=error_log,
-            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0,
+            creationflags=creation_flags,
         )
 
-        time.sleep(1.5)
+        time.sleep(2)
 
         if _proxy_process.poll() is not None:
-            error_log.write(f"[ERROR] mitmdump exited immediately with code: {_proxy_process.returncode}\n")
-            error_log.flush()
-            error_log.close()
-            
-            # 读取日志文件最后几行错误
-            try:
-                with open(log_file, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                    last_lines = ''.join(lines[-20:])
-                print('[WebProxy] mitmdump 进程启动后立即退出，退出码: ' + str(_proxy_process.returncode))
-                print('[WebProxy] 错误日志路径: ' + log_file)
-                print('[WebProxy] 最近错误:\n' + last_lines)
-            except Exception:
-                print('[WebProxy] mitmdump 进程启动后立即退出，退出码: ' + str(_proxy_process.returncode))
-                print('[WebProxy] 错误日志路径: ' + log_file)
-            
+            print('[WebProxy] mitmdump 进程启动后立即退出，退出码: ' + str(_proxy_process.returncode))
+            print('[WebProxy] 请查看新窗口中的错误信息')
+            print('[WebProxy] 日志文件: ' + log_file)
             _proxy_process = None
             return False
         
-        print('[WebProxy] 错误日志路径: ' + log_file)
         print('[WebProxy] 代理服务器已启动: http://{host}:{port}'.format(
             host=_proxy_host,
             port=str(port)
         ))
+        print('[WebProxy] mitmproxy 日志窗口已打开，请勿关闭')
+        print('[WebProxy] 日志文件: ' + log_file)
         return True
     except Exception as e:
         print('[WebProxy] 代理服务器启动失败: ' + str(e))

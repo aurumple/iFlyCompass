@@ -10,6 +10,11 @@ lib/
 libs/
 CLAUDE.md
 
+# Pyinstaller 生成的文件
+dist/
+build/
+iFlyCompass.spec
+
 # FFmpeg 二进制（跨平台自动下载）
 tools/ffmpeg/ffmpeg
 tools/ffmpeg/ffprobe

@@ -8,6 +8,7 @@ __pycache__/
 *.pyc
 lib/
 libs/
+CLAUDE.md
 
 # FFmpeg 二进制（跨平台自动下载）
 tools/ffmpeg/ffmpeg

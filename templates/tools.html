@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% include "_pwa_head.html" %}
-    <title>小工具 - iFlyCompass</title>
+    <title>{% if category == 'games' %}小游戏{% else %}小工具{% endif %} - iFlyCompass</title>
     <link rel="stylesheet" href="/assets/css/loading.css">
     <link rel="stylesheet" href="/assets/css/material-icons.css">
     <link rel="stylesheet" href="/assets/css/element-ui.css">
@@ -327,11 +327,11 @@
                         <i class="el-icon-s-home"></i>
                         <span slot="title">首页</span>
                     </el-menu-item>
-                    <el-menu-item index="tools" class="active">
+                    <el-menu-item index="tools" :class="{ active: activeMenu === 'tools' }">
                         <i class="el-icon-s-tools"></i>
                         <span slot="title">小工具</span>
                     </el-menu-item>
-                    <el-menu-item index="games">
+                    <el-menu-item index="games" :class="{ active: activeMenu === 'games' }">
                         <i class="el-icon-s-marketing"></i>
                         <span slot="title">小游戏</span>
                     </el-menu-item>
@@ -357,7 +357,7 @@
             <el-container>
                 <el-header class="console-header">
                     <div class="header-left">
-                        <h1>小工具</h1>
+                        <h1>{% if category == 'games' %}小游戏{% else %}小工具{% endif %}</h1>
                     </div>
                     <div class="header-right">
                         <div class="user-menu-container" @click="toggleUserMenu">
@@ -393,6 +393,11 @@
                 </el-header>
                 
                 <el-main class="console-content">
+                    {% if category == 'games' %}
+                    <div style="display: flex; align-items: center; justify-content: center; min-height: 400px;">
+                        <el-empty description="小游戏功能开发中，敬请期待"></el-empty>
+                    </div>
+                    {% else %}
                     <!-- 工具选择界面 -->
                     <div class="tools-select-container">
                         <div class="tools-select-header">
@@ -407,8 +412,8 @@
                                 <el-button type="primary" @click="handleSearch">查询</el-button>
                             </div>
                             <div class="pagination-container">
-                                <el-button 
-                                    type="text" 
+                                <el-button
+                                    type="text"
                                     @click="prevPage"
                                     :disabled="currentPage === 1"
                                 >
@@ -417,8 +422,8 @@
                                 <span style="margin: 0 10px;">
                                     [[ currentPage ]]/[[ totalPages ]]
                                 </span>
-                                <el-button 
-                                    type="text" 
+                                <el-button
+                                    type="text"
                                     @click="nextPage"
                                     :disabled="currentPage >= totalPages"
                                 >
@@ -428,8 +433,8 @@
                         </div>
                         <div class="tools-select-body">
                             <div class="tools-grid">
-                                <div 
-                                    v-for="tool in paginatedTools" 
+                                <div
+                                    v-for="tool in paginatedTools"
                                     :key="tool.id"
                                     class="tool-card"
                                     @click="navigateToToolExternal(tool)"
@@ -452,6 +457,7 @@
                             </div>
                         </div>
                     </div>
+                    {% endif %}
                 </el-main>
             </el-container>
         </el-container>
@@ -485,7 +491,7 @@
     <script src="/assets/js/drop.js"></script>
     <script>
         // 页面加载完成日志
-        console.log('=== iFlyCompass 小工具页面加载完成 ===');
+        console.log('=== iFlyCompass {% if category == 'games' %}小游戏{% else %}小工具{% endif %}页面加载完成 ===');
         
         new Vue({
             el: '#app',
@@ -493,7 +499,7 @@
             data() {
                 return {
                     isCollapse: {% if sidebar_expanded %}false{% else %}true{% endif %},
-                    activeMenu: 'tools',
+                    activeMenu: '{{ category or 'tools' }}',
                     displayName: '{{ current_user.display_name }}',
                     username: '{{ current_user.username }}',
                     nickname: '{{ current_user.nickname or "" }}',
@@ -588,7 +594,7 @@
                         }
                     ];
                     
-                    fetch('/api/nav/items?category=tools')
+                    fetch('/api/nav/items?category={{ category or 'tools' }}')
                         .then(function(response) { return response.json(); })
                         .then(function(data) {
                             var allTools = [];

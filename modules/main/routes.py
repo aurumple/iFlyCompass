@@ -23,10 +23,21 @@ def board():
 @login_required
 def tools():
     settings = get_settings()
-    return render_template('tools.html', 
+    return render_template('tools.html',
                          current_user=current_user,
                          sidebar_expanded=settings.get('sidebar_default_expanded', False),
-                         card_layout=settings.get('card_layout', '1x4'))
+                         card_layout=settings.get('card_layout', '1x4'),
+                         category='tools')
+
+@main_bp.route('/board/games')
+@login_required
+def games():
+    settings = get_settings()
+    return render_template('tools.html',
+                         current_user=current_user,
+                         sidebar_expanded=settings.get('sidebar_default_expanded', False),
+                         card_layout=settings.get('card_layout', '1x4'),
+                         category='games')
 
 @main_bp.route('/board/swipe-test')
 @login_required

@@ -76,6 +76,11 @@ class WebProxyAddon:
         host = parsed.hostname or ''
         port = parsed.port or (443 if parsed.scheme == 'https' else 80)
 
+        flow._client_proxy_host = host
+
+        if host and port == PROXY_PORT:
+            set_proxy_host(host)
+
         ph = get_proxy_host()
 
         if not flow.request.headers.get('User-Agent'):
@@ -146,6 +151,10 @@ class WebProxyAddon:
         if not flow.response:
             return
 
+        client_host = getattr(flow, '_client_proxy_host', None)
+        if client_host:
+            set_proxy_host(client_host)
+
         ph = get_proxy_host()
 
         if flow.response.status_code in (301, 302, 303, 307, 308):
@@ -164,11 +173,7 @@ class WebProxyAddon:
             self._rewrite_js(flow)
 
     def _is_proxy_self(self, host, port):
-        ph = get_proxy_host()
-        return (
-            (host in ('localhost', '127.0.0.1', ph) and port == PROXY_PORT)
-            or (host == '0.0.0.0' and port == PROXY_PORT)
-        )
+        return port == PROXY_PORT
 
     def _is_proxy_referer(self, referer):
         if not referer:

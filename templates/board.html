@@ -406,20 +406,20 @@
                                     {% endif %}
                                 </p>
                                 <div class="feature-grid">
-                                    <el-card class="feature-card">
+                                    <el-card class="feature-card" @click.native="goToFeature('dashboard')">
                                         <i class="el-icon-s-home feature-icon"></i>
                                         <p>首页</p>
                                     </el-card>
-                                    <el-card class="feature-card">
+                                    <el-card class="feature-card" @click.native="goToFeature('tools')">
                                         <i class="el-icon-s-tools feature-icon"></i>
                                         <p>小工具</p>
                                     </el-card>
-                                    <el-card class="feature-card">
+                                    <el-card class="feature-card" @click.native="goToFeature('games')">
                                         <i class="el-icon-s-marketing feature-icon"></i>
                                         <p>小游戏</p>
                                     </el-card>
                                     {% if current_user.is_admin or current_user.is_super_admin %}
-                                    <el-card class="feature-card">
+                                    <el-card class="feature-card" @click.native="goToFeature('users')">
                                         <i class="el-icon-s-custom feature-icon"></i>
                                         <p>用户管理</p>
                                     </el-card>
@@ -803,6 +803,9 @@
                     console.log('=== 退出登录操作开始 ===');
                     window.location.href = '/logout';
                 },
+                goToFeature(key) {
+                    this.handleMenuClick(key);
+                },
                 handleMenuClick(key) {
                     console.log('菜单点击:', key);
                     this.userMenuVisible = false;
@@ -810,6 +813,8 @@
                         window.location.href = '/board';
                     } else if (key === 'tools') {
                         window.location.href = '/board/tools';
+                    } else if (key === 'games') {
+                        window.location.href = '/board/games';
                     } else if (key === 'users') {
                         window.location.href = '/board/users';
                     } else if (key === 'passkeys') {

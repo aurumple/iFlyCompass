@@ -95,6 +95,24 @@ def get_video_encoder_params(use_qsv=False):
         return ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-threads', '0']
 
 
+def _is_qsv_error(error_lines):
+    """检查FFmpeg错误输出是否由QSV硬件编码失败引起"""
+    for line in error_lines:
+        if 'MFX' in line or 'mfx' in line or 'h264_qsv' in line:
+            return True
+    return False
+
+
+def safe_rename(src, dst):
+    """跨平台安全重命名，Windows下目标存在时先删除"""
+    if os.path.exists(dst):
+        try:
+            os.remove(dst)
+        except OSError:
+            pass
+    os.rename(src, dst)
+
+
 def ensure_bili_dir():
     if not os.path.exists(BILI_DIR):
         os.makedirs(BILI_DIR)
@@ -263,11 +281,11 @@ def download_file(url, filepath, task, headers=None):
     return actual_size
 
 
-def convert_to_h264(input_path, output_path, task):
+def convert_to_h264(input_path, output_path, task, force_software=False):
     if not FFMPEG_PATH or not os.path.exists(input_path):
         print(f'[Bili] FFmpeg未找到或输入文件不存在，跳过转换')
         if os.path.exists(input_path):
-            os.rename(input_path, output_path)
+            safe_rename(input_path, output_path)
             return True
         return False
 
@@ -275,7 +293,8 @@ def convert_to_h264(input_path, output_path, task):
     print(f'[Bili] 开始转换视频为H264格式: {input_path} -> {output_path} ({format_size(input_size)})')
 
     try:
-        encoder_params = get_video_encoder_params(HAS_QSV)
+        use_qsv = HAS_QSV and not force_software
+        encoder_params = get_video_encoder_params(use_qsv)
         cmd = [
             FFMPEG_PATH, '-y',
             '-i', input_path,
@@ -339,12 +358,17 @@ def convert_to_h264(input_path, output_path, task):
             print(f'[Bili] 错误输出:')
             for line in error_output[-20:]:
                 print(f'    {line}')
+
+            if use_qsv and _is_qsv_error(error_output):
+                print(f'[Bili] 检测到QSV硬件编码失败，回退到libx264软件编码重试')
+                return convert_to_h264(input_path, output_path, task, force_software=True)
+
             return False
 
     except FileNotFoundError:
         print('[Bili] FFmpeg未找到，跳过转换')
         if os.path.exists(input_path):
-            os.rename(input_path, output_path)
+            safe_rename(input_path, output_path)
             return True
         return False
     except Exception as e:
@@ -354,7 +378,7 @@ def convert_to_h264(input_path, output_path, task):
         return False
 
 
-def merge_and_convert_video_audio(video_path, audio_path, output_path, task):
+def merge_and_convert_video_audio(video_path, audio_path, output_path, task, force_software=False):
     if not FFMPEG_PATH:
         print('[Bili] FFmpeg未找到，跳过合并转换')
         return False
@@ -371,7 +395,8 @@ def merge_and_convert_video_audio(video_path, audio_path, output_path, task):
         return False
 
     try:
-        encoder_params = get_video_encoder_params(HAS_QSV)
+        use_qsv = HAS_QSV and not force_software
+        encoder_params = get_video_encoder_params(use_qsv)
         cmd = [FFMPEG_PATH, '-y', '-i', video_path]
         if audio_exists:
             cmd.extend(['-i', audio_path])
@@ -432,6 +457,11 @@ def merge_and_convert_video_audio(video_path, audio_path, output_path, task):
             print(f'[Bili] 错误输出:')
             for line in error_output[-20:]:
                 print(f'    {line}')
+
+            if use_qsv and _is_qsv_error(error_output):
+                print(f'[Bili] 检测到QSV硬件编码失败，回退到libx264软件编码重试')
+                return merge_and_convert_video_audio(video_path, audio_path, output_path, task, force_software=True)
+
             return False
 
     except FileNotFoundError:
@@ -505,7 +535,7 @@ def download_video_task(task):
                 else:
                     print(f'[Bili] 转换失败，保留原始文件')
                     if os.path.exists(temp_merged_path):
-                        os.rename(temp_merged_path, video_path)
+                        safe_rename(temp_merged_path, video_path)
                     task.status = 'completed'
                     task.progress = 100
                     task.error = '视频转换失败，保留原始格式'
@@ -576,7 +606,7 @@ def download_video_task(task):
                             else:
                                 print(f'[Bili] 转换失败，保留原始文件')
                                 if os.path.exists(temp_video_path):
-                                    os.rename(temp_video_path, video_path)
+                                    safe_rename(temp_video_path, video_path)
                                 task.error = '视频转换失败，保留原始格式'
                 else:
                     if os.path.exists(temp_video_path):
@@ -589,7 +619,7 @@ def download_video_task(task):
                             print(f'[Bili] 视频转换成功: {video_path}')
                         else:
                             print(f'[Bili] 转换失败，保留原始文件')
-                            os.rename(temp_video_path, video_path)
+                            safe_rename(temp_video_path, video_path)
                             task.error = '视频转换失败，保留原始格式'
 
                 task.status = 'completed'
